@@ -326,4 +326,25 @@ const Store = {
       fat: Math.round(totalFat / dayCount),
     };
   },
+
+  // Custom Foods
+  getCustomFoods() {
+    try {
+      return JSON.parse(localStorage.getItem('ft_custom_foods') || '[]');
+    } catch(e) { return []; }
+  },
+
+  addCustomFood(food) {
+    const foods = this.getCustomFoods();
+    food.id = 'c_' + Date.now();
+    food.custom = true;
+    foods.push(food);
+    localStorage.setItem('ft_custom_foods', JSON.stringify(foods));
+    return food;
+  },
+
+  deleteCustomFood(id) {
+    const foods = this.getCustomFoods().filter(f => f.id !== id);
+    localStorage.setItem('ft_custom_foods', JSON.stringify(foods));
+  },
 };

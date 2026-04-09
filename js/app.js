@@ -18,13 +18,14 @@ const app = createApp({
   setup() {
     const currentTab = ref('home');
     const darkMode = ref(localStorage.getItem('ft_dark') === '1');
-    const storeData = Store.init();
+    Store.init();
+    const _initData = JSON.parse(JSON.stringify(Store.getData()));
     const state = reactive({
-      profile: storeData.profile,
-      bodyMeasurements: storeData.bodyMeasurements,
-      meals: storeData.meals,
-      workouts: storeData.workouts,
-      progressPhotos: storeData.progressPhotos,
+      profile: _initData.profile,
+      bodyMeasurements: _initData.bodyMeasurements,
+      meals: _initData.meals,
+      workouts: _initData.workouts,
+      progressPhotos: _initData.progressPhotos,
     });
     const showOnboarding = ref(!Store.isSetupComplete());
     const toastMsg = ref('');
@@ -41,8 +42,12 @@ const app = createApp({
       toastTimer = setTimeout(() => toastMsg.value = '', 2500);
     }
 
+    function _cloneState(d) {
+      return JSON.parse(JSON.stringify(d));
+    }
+
     function refreshData() {
-      const d = Store.getData();
+      const d = _cloneState(Store.getData());
       state.profile = d.profile;
       state.bodyMeasurements = d.bodyMeasurements;
       state.meals = d.meals;
@@ -51,12 +56,8 @@ const app = createApp({
     }
 
     function resetData() {
-      const d = Store.resetToSample();
-      state.profile = d.profile;
-      state.bodyMeasurements = d.bodyMeasurements;
-      state.meals = d.meals;
-      state.workouts = d.workouts;
-      state.progressPhotos = d.progressPhotos;
+      Store.resetToSample();
+      refreshData();
       showToast('已重置为示例数据');
     }
 
@@ -67,12 +68,8 @@ const app = createApp({
     }
 
     function logout() {
-      const d = Store.resetToEmpty();
-      state.profile = d.profile;
-      state.bodyMeasurements = d.bodyMeasurements;
-      state.meals = d.meals;
-      state.workouts = d.workouts;
-      state.progressPhotos = d.progressPhotos;
+      Store.resetToEmpty();
+      refreshData();
       showOnboarding.value = true;
     }
 
@@ -710,6 +707,10 @@ app.component('diet-page', {
 
     const selectedFood = ref(null);
     const inputGrams = ref(0);
+    const modalView = ref('list');
+    const customForm = reactive({ name:'', caloriesPer100g:'', protein:'', carbs:'', fat:'', category:'主食', emoji:'🍽️' });
+    const onlineResults = ref([]);
+    const onlineLoading = ref(false);
 
     const meals = computed(() => props.state.meals.filter(m => m.date === selectedDate.value));
 
@@ -736,6 +737,7 @@ app.component('diet-page', {
       searchQuery.value = '';
       selectedCategory.value = '全部';
       selectedFood.value = null;
+      modalView.value = 'list';
       showAddFood.value = true;
       document.body.style.overflow = 'hidden';
     }
@@ -743,16 +745,19 @@ app.component('diet-page', {
     function closeModal() {
       showAddFood.value = false;
       selectedFood.value = null;
+      modalView.value = 'list';
       document.body.style.overflow = '';
     }
 
     function selectFood(food) {
       selectedFood.value = food;
       inputGrams.value = food.defaultGrams;
+      modalView.value = 'portion';
     }
 
     function backToList() {
       selectedFood.value = null;
+      modalView.value = 'list';
     }
 
     function setGrams(g) {
@@ -772,12 +777,71 @@ app.component('diet-page', {
       };
     });
 
+    const allFoods = computed(() => {
+      const custom = Store.getCustomFoods();
+      return [...FOOD_DATABASE, ...custom];
+    });
+
     const filteredFoods = computed(() => {
-      let foods = FOOD_DATABASE;
-      if (selectedCategory.value !== '全部') foods = foods.filter(f => f.category === selectedCategory.value);
+      let foods = allFoods.value;
+      if (selectedCategory.value === '自定义') { foods = foods.filter(f => f.custom); }
+      else if (selectedCategory.value !== '全部') { foods = foods.filter(f => f.category === selectedCategory.value); }
       if (searchQuery.value) { const q = searchQuery.value.toLowerCase(); foods = foods.filter(f => f.name.toLowerCase().includes(q)); }
       return foods;
     });
+
+    function openCustomForm() {
+      Object.assign(customForm, { name: searchQuery.value || '', caloriesPer100g:'', protein:'', carbs:'', fat:'', category:'主食', emoji:'🍽️' });
+      modalView.value = 'custom';
+    }
+
+    function saveCustomFood() {
+      if (!customForm.name) { emit('toast','请输入食物名称'); return; }
+      if (!customForm.caloriesPer100g) { emit('toast','请输入每100g热量'); return; }
+      const food = Store.addCustomFood({
+        name: customForm.name,
+        category: customForm.category,
+        caloriesPer100g: parseFloat(customForm.caloriesPer100g) || 0,
+        protein: parseFloat(customForm.protein) || 0,
+        carbs: parseFloat(customForm.carbs) || 0,
+        fat: parseFloat(customForm.fat) || 0,
+        defaultUnit: 'g',
+        defaultGrams: 100,
+        emoji: customForm.emoji || '🍽️',
+        favorite: false,
+      });
+      emit('toast', food.name + ' 已保存到自定义食物库');
+      selectFood(food);
+    }
+
+    async function searchOnline() {
+      const q = searchQuery.value.trim();
+      if (!q) return;
+      onlineLoading.value = true;
+      onlineResults.value = [];
+      try {
+        const res = await fetch('https://world.openfoodfacts.org/cgi/search.pl?search_terms=' + encodeURIComponent(q) + '&search_simple=1&action=process&json=1&page_size=10&fields=product_name,nutriments,image_small_url');
+        const data = await res.json();
+        onlineResults.value = (data.products || []).filter(p => p.product_name && p.nutriments).map(p => ({
+          name: p.product_name,
+          caloriesPer100g: Math.round(p.nutriments['energy-kcal_100g'] || p.nutriments['energy-kcal'] || 0),
+          protein: Math.round((p.nutriments.proteins_100g || 0) * 10) / 10,
+          carbs: Math.round((p.nutriments.carbohydrates_100g || 0) * 10) / 10,
+          fat: Math.round((p.nutriments.fat_100g || 0) * 10) / 10,
+          image: p.image_small_url || '',
+        })).filter(p => p.caloriesPer100g > 0);
+        if (onlineResults.value.length === 0) emit('toast', '在线未找到匹配结果');
+        modalView.value = 'online';
+      } catch(e) {
+        emit('toast', '网络搜索失败，请检查网络连接');
+      }
+      onlineLoading.value = false;
+    }
+
+    function useOnlineResult(result) {
+      Object.assign(customForm, { name: result.name, caloriesPer100g: result.caloriesPer100g, protein: result.protein, carbs: result.carbs, fat: result.fat, category:'主食', emoji:'🍽️' });
+      modalView.value = 'custom';
+    }
 
     function confirmAddFood() {
       const food = selectedFood.value;
@@ -785,17 +849,18 @@ app.component('diet-page', {
       const grams = parseFloat(inputGrams.value) || food.defaultGrams;
       const multiplier = grams / 100;
       const foodEntry = {
-        id: generateId(), foodId: food.id, name: food.name, emoji: food.emoji,
+        id: generateId(), foodId: food.id || food.name, name: food.name, emoji: food.emoji || '🍽️',
         quantity: 1, grams: grams, unit: 'g',
         calories: Math.round(food.caloriesPer100g * multiplier),
         protein: Math.round(food.protein * multiplier * 10)/10,
         carbs: Math.round(food.carbs * multiplier * 10)/10,
         fat: Math.round(food.fat * multiplier * 10)/10,
       };
-      const existingMeal = getMealData(addMealType.value);
-      if (existingMeal) {
-        existingMeal.foods.push(foodEntry);
-        Store.updateMeal(existingMeal.id, { foods: existingMeal.foods });
+      const storeMeals = Store.getMealsByDate(selectedDate.value);
+      const storeMeal = storeMeals.find(m => m.type === addMealType.value);
+      if (storeMeal) {
+        storeMeal.foods.push(foodEntry);
+        Store.updateMeal(storeMeal.id, { foods: storeMeal.foods });
       } else {
         Store.addMeal({
           date: selectedDate.value, type: addMealType.value, foods: [foodEntry],
@@ -805,11 +870,13 @@ app.component('diet-page', {
       emit('refresh');
       emit('toast', food.name + ' ' + grams + 'g 已添加');
       selectedFood.value = null;
+      modalView.value = 'list';
     }
 
     function removeFood(mealType, foodId) {
-      const meal = getMealData(mealType);
-      if (meal) { Store.deleteFoodFromMeal(meal.id, foodId); emit('refresh'); }
+      const storeMeals = Store.getMealsByDate(selectedDate.value);
+      const storeMeal = storeMeals.find(m => m.type === mealType);
+      if (storeMeal) { Store.deleteFoodFromMeal(storeMeal.id, foodId); emit('refresh'); }
     }
 
     function changeDate(delta) {
@@ -832,7 +899,7 @@ app.component('diet-page', {
       return goal > 0 ? Math.min(Math.round(nutrition.value.calories / goal * 100), 100) : 0;
     });
 
-    return { selectedDate, meals, nutrition, mealTypes, getMealFoods, getMealCalories, showAddFood, addMealType, searchQuery, selectedCategory, filteredFoods, openAddFood, closeModal, selectFood, backToList, setGrams, inputGrams, selectedFood, previewNutrition, confirmAddFood, removeFood, changeDate, copyYesterday, isToday, calPercent };
+    return { selectedDate, meals, nutrition, mealTypes, getMealFoods, getMealCalories, showAddFood, addMealType, searchQuery, selectedCategory, filteredFoods, openAddFood, closeModal, selectFood, backToList, setGrams, inputGrams, selectedFood, previewNutrition, confirmAddFood, removeFood, changeDate, copyYesterday, isToday, calPercent, modalView, customForm, onlineResults, onlineLoading, openCustomForm, saveCustomFood, searchOnline, useOnlineResult };
   },
   template: `
     <div style="padding:16px;">
@@ -901,24 +968,27 @@ app.component('diet-page', {
         <div class="modal-handle"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
           <div style="font-size:18px;font-weight:700;">
-            <span v-if="selectedFood" @click="backToList" style="cursor:pointer;margin-right:6px;color:var(--primary);">←</span>
-            {{selectedFood ? '设置份量' : '添加食物 · ' + addMealType}}
+            <span v-if="modalView!=='list'" @click="backToList" style="cursor:pointer;margin-right:6px;color:var(--primary);">←</span>
+            {{modalView==='portion'?'设置份量':modalView==='custom'?'自定义食物':modalView==='online'?'在线搜索结果':'添加食物 · '+addMealType}}
           </div>
           <button @click="closeModal" style="background:none;border:none;font-size:22px;color:var(--text-secondary);cursor:pointer;padding:4px 0 4px 12px;">✕</button>
         </div>
 
-        <template v-if="!selectedFood">
+        <template v-if="modalView==='list'">
           <div class="form-group" style="margin-bottom:10px;">
-            <input class="form-input" v-model="searchQuery" placeholder="🔍 搜索食物..." style="font-size:15px;" />
+            <div style="display:flex;gap:8px;">
+              <input class="form-input" v-model="searchQuery" placeholder="🔍 搜索食物..." style="font-size:15px;flex:1;" />
+              <button v-if="searchQuery" class="btn btn-sm btn-outline" @click="searchOnline" style="white-space:nowrap;font-size:12px;" :disabled="onlineLoading">🌐 在线搜索</button>
+            </div>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
-            <span v-for="cat in ['全部','主食','肉类','蛋奶','蔬菜','水果','坚果','油脂','豆制品','补剂']" :key="cat" class="pill" :class="{active:selectedCategory===cat}" @click="selectedCategory=cat" style="font-size:12px;">{{cat}}</span>
+            <span v-for="cat in ['全部','主食','肉类','蛋奶','蔬菜','水果','坚果','油脂','豆制品','补剂','自定义']" :key="cat" class="pill" :class="{active:selectedCategory===cat}" @click="selectedCategory=cat" style="font-size:12px;">{{cat}}</span>
           </div>
-          <div style="max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+          <div style="max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
             <div v-for="food in filteredFoods" :key="food.id" class="food-item" @click="selectFood(food)" style="cursor:pointer;">
               <div class="food-emoji">{{food.emoji}}</div>
               <div class="food-info">
-                <div class="food-name">{{food.name}}</div>
+                <div class="food-name">{{food.name}}<span v-if="food.custom" style="font-size:10px;color:var(--primary);margin-left:4px;">[自定义]</span></div>
                 <div class="food-detail">每100g {{food.caloriesPer100g}} kcal · 默认{{food.defaultGrams}}g</div>
               </div>
               <div style="color:var(--primary);font-size:20px;font-weight:300;">›</div>
@@ -927,25 +997,26 @@ app.component('diet-page', {
               <div class="icon">🔍</div><div class="desc">未找到匹配食物</div>
             </div>
           </div>
+          <div style="display:flex;gap:8px;margin-top:14px;">
+            <button class="btn btn-outline" style="flex:1;font-size:13px;" @click="openCustomForm">➕ 手动添加食物</button>
+            <button v-if="searchQuery" class="btn btn-outline" style="flex:1;font-size:13px;" @click="searchOnline" :disabled="onlineLoading">🌐 搜索 "{{searchQuery}}"</button>
+          </div>
         </template>
 
-        <template v-else>
+        <template v-if="modalView==='portion'">
           <div style="text-align:center;padding:8px 0 16px;">
             <div style="font-size:40px;">{{selectedFood.emoji}}</div>
             <div style="font-size:18px;font-weight:700;margin-top:4px;">{{selectedFood.name}}</div>
             <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">每100g：{{selectedFood.caloriesPer100g}} kcal · P{{selectedFood.protein}} C{{selectedFood.carbs}} F{{selectedFood.fat}}</div>
           </div>
-
           <div class="form-group" style="margin-bottom:12px;">
             <label class="form-label">份量 (克)</label>
             <input class="form-input" type="number" v-model="inputGrams" min="1" step="1" style="font-size:20px;text-align:center;font-weight:700;" />
           </div>
-
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;justify-content:center;">
             <button v-for="g in [50,80,100,120,150,200,250,300]" :key="g" class="pill" :class="{active:inputGrams==g}" @click="setGrams(g)" style="font-size:12px;min-width:44px;">{{g}}g</button>
             <button class="pill" :class="{active:inputGrams==selectedFood.defaultGrams}" @click="setGrams(selectedFood.defaultGrams)" style="font-size:12px;">默认({{selectedFood.defaultGrams}}g)</button>
           </div>
-
           <div v-if="previewNutrition" class="card" style="margin-bottom:16px;background:var(--bg);">
             <div style="text-align:center;margin-bottom:8px;">
               <span style="font-size:24px;font-weight:800;color:var(--primary);">{{previewNutrition.calories}}</span>
@@ -957,8 +1028,49 @@ app.component('diet-page', {
               <div style="flex:1;text-align:center;"><div style="font-size:14px;font-weight:700;color:#ef4444;">{{previewNutrition.fat}}g</div><div style="font-size:11px;color:var(--text-secondary);">脂肪</div></div>
             </div>
           </div>
-
           <button class="btn btn-primary" @click="confirmAddFood" style="width:100%;">✓ 添加到{{addMealType}}</button>
+        </template>
+
+        <template v-if="modalView==='custom'">
+          <div style="max-height:60vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+            <div class="form-group"><label class="form-label">食物名称 *</label><input class="form-input" v-model="customForm.name" placeholder="如：全麦面包" /></div>
+            <div class="form-group"><label class="form-label">分类</label>
+              <select class="form-input" v-model="customForm.category"><option v-for="c in ['主食','肉类','蛋奶','蔬菜','水果','坚果','油脂','豆制品','补剂']" :key="c">{{c}}</option></select>
+            </div>
+            <div class="form-group"><label class="form-label">每100g 热量 (kcal) *</label><input class="form-input" type="number" v-model="customForm.caloriesPer100g" placeholder="0" /></div>
+            <div style="display:flex;gap:8px;">
+              <div class="form-group" style="flex:1;"><label class="form-label">蛋白质 (g)</label><input class="form-input" type="number" v-model="customForm.protein" placeholder="0" /></div>
+              <div class="form-group" style="flex:1;"><label class="form-label">碳水 (g)</label><input class="form-input" type="number" v-model="customForm.carbs" placeholder="0" /></div>
+              <div class="form-group" style="flex:1;"><label class="form-label">脂肪 (g)</label><input class="form-input" type="number" v-model="customForm.fat" placeholder="0" /></div>
+            </div>
+            <div class="form-group"><label class="form-label">图标</label>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                <span v-for="e in ['🍽️','🥘','🥗','🍲','🍜','🥩','🍖','🥚','🧀','🍞','🥐','🍕','🌮','🥪','🍙','🍚','🥤','🍰','🍫','🥜']" :key="e" style="font-size:24px;cursor:pointer;padding:4px;border-radius:8px;" :style="{background:customForm.emoji===e?'var(--primary-light)':'transparent'}" @click="customForm.emoji=e">{{e}}</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" @click="saveCustomFood" style="width:100%;margin-top:12px;">💾 保存并选择</button>
+        </template>
+
+        <template v-if="modalView==='online'">
+          <div v-if="onlineLoading" style="text-align:center;padding:40px;"><div style="font-size:32px;margin-bottom:8px;">⏳</div><div style="color:var(--text-secondary);">正在搜索...</div></div>
+          <div v-else-if="onlineResults.length===0" style="text-align:center;padding:40px;">
+            <div style="font-size:32px;margin-bottom:8px;">🔍</div>
+            <div style="color:var(--text-secondary);margin-bottom:12px;">未找到匹配结果</div>
+            <button class="btn btn-outline" @click="openCustomForm">手动输入营养数据</button>
+          </div>
+          <div v-else style="max-height:55vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">数据来源：Open Food Facts · 点击选择</div>
+            <div v-for="(r,idx) in onlineResults" :key="idx" class="food-item" @click="useOnlineResult(r)" style="cursor:pointer;">
+              <div class="food-emoji"><img v-if="r.image" :src="r.image" style="width:36px;height:36px;border-radius:8px;object-fit:cover;" /><span v-else>🌐</span></div>
+              <div class="food-info">
+                <div class="food-name" style="font-size:13px;">{{r.name}}</div>
+                <div class="food-detail">{{r.caloriesPer100g}} kcal/100g · P{{r.protein}} C{{r.carbs}} F{{r.fat}}</div>
+              </div>
+              <div style="color:var(--primary);font-size:20px;font-weight:300;">›</div>
+            </div>
+          </div>
+          <button class="btn btn-outline" @click="openCustomForm" style="width:100%;margin-top:12px;">找不到？手动输入</button>
         </template>
       </div>
     </div>

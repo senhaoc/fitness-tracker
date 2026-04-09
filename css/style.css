@@ -34,6 +34,7 @@
 html {
   font-size: 16px;
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -42,12 +43,14 @@ body {
   background: var(--bg);
   color: var(--text);
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
 #app {
   height: 100%;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   max-width: 480px;
@@ -62,7 +65,7 @@ body {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   padding-top: max(8px, env(safe-area-inset-top));
-  padding-bottom: 80px;
+  padding-bottom: 8px;
 }
 
 .page-container::-webkit-scrollbar {
@@ -71,12 +74,8 @@ body {
 
 /* Bottom Navigation */
 .bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  flex-shrink: 0;
   width: 100%;
-  max-width: 480px;
   background: var(--card);
   border-top: 1px solid var(--border);
   display: flex;
