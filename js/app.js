@@ -118,14 +118,33 @@ app.component('onboarding-page', {
     });
 
     function handleGoogleSignIn() {
+      const clientId = localStorage.getItem('ft_google_client_id') || '';
+      if (!clientId || clientId === 'YOUR_CLIENT_ID.apps.googleusercontent.com') {
+        const id = prompt(
+          'Google 登录需要 OAuth Client ID。\n\n' +
+          '获取方法：\n' +
+          '1. 打开 console.cloud.google.com\n' +
+          '2. 创建项目 → API和服务 → 凭据\n' +
+          '3. 创建 OAuth 2.0 客户端 ID（Web 应用）\n' +
+          '4. 添加已授权的 JavaScript 来源\n' +
+          '5. 复制 Client ID 粘贴到下方\n\n' +
+          '或点取消，使用「手动创建档案」。',
+        );
+        if (!id || !id.includes('.apps.googleusercontent.com')) {
+          step.value = 2;
+          return;
+        }
+        localStorage.setItem('ft_google_client_id', id);
+      }
       if (typeof google === 'undefined' || !google.accounts) {
-        alert('Google 登录服务加载中，请稍后再试，或使用手动注册。');
+        alert('Google 登录服务加载中，请稍后再试。');
+        step.value = 2;
         return;
       }
       googleLoading.value = true;
       try {
         google.accounts.id.initialize({
-          client_id: localStorage.getItem('ft_google_client_id') || 'YOUR_CLIENT_ID.apps.googleusercontent.com',
+          client_id: localStorage.getItem('ft_google_client_id'),
           callback: (response) => {
             googleLoading.value = false;
             try {
@@ -136,7 +155,8 @@ app.component('onboarding-page', {
               form.googleId = payload.sub || '';
               step.value = 2;
             } catch(e) {
-              alert('登录解析失败: ' + e.message);
+              alert('登录解析失败，请使用手动创建档案。');
+              step.value = 2;
             }
           },
         });
@@ -151,7 +171,8 @@ app.component('onboarding-page', {
         });
       } catch(e) {
         googleLoading.value = false;
-        alert('Google 登录初始化失败。请先在 "我的" 页面设置 Google Client ID，或使用手动注册。');
+        alert('Google 登录失败，已切换到手动创建档案。');
+        step.value = 2;
       }
     }
 
