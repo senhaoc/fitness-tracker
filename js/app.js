@@ -257,7 +257,7 @@ app.component('onboarding-page', {
     return { step, form, googleLoading, handleGoogleSignIn, skipToManual, goToGoals, finishSetup, loadDemo, suggestedCalories };
   },
   template: `
-    <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
+    <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;padding-top:max(8px, env(safe-area-inset-top));">
       <!-- Step 1: Welcome -->
       <div v-if="step===1" style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 24px;text-align:center;">
         <div style="font-size:64px;margin-bottom:16px;">💪</div>
@@ -367,10 +367,10 @@ app.component('onboarding-page', {
           </div>
         </div>
 
-        <div class="card" style="margin:16px 0;background:linear-gradient(135deg,#ecfdf5,#f0fdf4);border-color:#a7f3d0;">
-          <div style="font-size:13px;font-weight:600;color:#059669;margin-bottom:8px;">📊 推荐每日摄入</div>
-          <div style="font-size:28px;font-weight:800;color:#059669;">{{suggestedCalories}} kcal</div>
-          <div style="font-size:12px;color:#064e3b;margin-top:4px;">基于你的 BMR × 活动水平 {{form.goalType==='减脂'?'- 400 热量缺口':form.goalType==='增肌'?'+ 300 热量盈余':''}}</div>
+        <div class="card" style="margin:16px 0;border-color:var(--primary-light);border-left:3px solid var(--primary);">
+          <div style="font-size:13px;font-weight:600;color:var(--primary);margin-bottom:8px;">📊 推荐每日摄入</div>
+          <div style="font-size:28px;font-weight:800;color:var(--primary);">{{suggestedCalories}} kcal</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">基于你的 BMR × 活动水平 {{form.goalType==='减脂'?'- 400 热量缺口':form.goalType==='增肌'?'+ 300 热量盈余':''}}</div>
         </div>
 
         <div class="form-group">
@@ -593,7 +593,7 @@ app.component('home-page', {
     <div style="padding:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <div>
-          <div style="font-size:14px;color:var(--text-secondary);">{{greeting}}，{{state.profile.name}}</div>
+          <div style="font-size:14px;color:var(--text-secondary);">{{greeting}}{{state.profile.name ? '，'+state.profile.name : ''}}</div>
           <div style="font-size:22px;font-weight:800;margin-top:2px;">今日概览</div>
         </div>
         <div class="tag" v-if="streak>0">🔥 连续{{streak}}天</div>
@@ -656,18 +656,18 @@ app.component('home-page', {
         </div>
       </div>
 
-      <div class="card" style="background:linear-gradient(135deg,#ecfdf5,#f0fdf4);border-color:#a7f3d0;">
-        <div style="font-size:14px;font-weight:700;margin-bottom:8px;color:#059669;">📋 今日总结</div>
-        <div style="font-size:13px;color:#064e3b;line-height:1.6;">
+      <div class="card" style="border-color:var(--primary-light);border-left:3px solid var(--primary);">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--primary);">📋 今日总结</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.6;">
           <div v-if="todayNutrition.calories>0">
             今日已摄入 <b>{{todayNutrition.calories}} kcal</b>，
             蛋白质 {{todayNutrition.protein}}g / 碳水 {{todayNutrition.carbs}}g / 脂肪 {{todayNutrition.fat}}g
           </div>
-          <div v-else style="color:#92400e;">⚠️ 今日尚未记录饮食，请及时记录</div>
+          <div v-else style="color:var(--warning);">⚠️ 今日尚未记录饮食，请及时记录</div>
           <div v-if="todayWorkouts.length>0" style="margin-top:4px;">
             已完成 <b>{{todayWorkouts.length}}</b> 次训练，消耗约 <b>{{todayWorkouts.reduce((s,w)=>s+(w.caloriesBurned||0),0)}} kcal</b>
           </div>
-          <div v-else style="margin-top:4px;color:#92400e;">⚠️ 今日尚未训练，动起来吧！</div>
+          <div v-else style="margin-top:4px;color:var(--warning);">⚠️ 今日尚未训练，动起来吧！</div>
         </div>
       </div>
     </div>
@@ -675,7 +675,10 @@ app.component('home-page', {
     <div v-if="showWeightModal" class="modal-overlay" @click.self="showWeightModal=false">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:16px;">记录体重/腰围</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="font-size:18px;font-weight:700;">记录体重/腰围</div>
+          <button @click="showWeightModal=false" style="background:none;border:none;font-size:22px;color:var(--text-secondary);cursor:pointer;">✕</button>
+        </div>
         <div class="form-group">
           <label class="form-label">体重 (kg)</label>
           <input class="form-input" type="number" step="0.1" v-model="newWeight" :placeholder="latestWeight?'上次: '+latestWeight:'输入体重'" />
@@ -705,6 +708,9 @@ app.component('diet-page', {
     const selectedCategory = ref('全部');
     const mealTypes = ['早餐','午餐','晚餐','加餐'];
 
+    const selectedFood = ref(null);
+    const inputGrams = ref(0);
+
     const meals = computed(() => props.state.meals.filter(m => m.date === selectedDate.value));
 
     const nutrition = computed(() => {
@@ -729,8 +735,42 @@ app.component('diet-page', {
       addMealType.value = type;
       searchQuery.value = '';
       selectedCategory.value = '全部';
+      selectedFood.value = null;
       showAddFood.value = true;
+      document.body.style.overflow = 'hidden';
     }
+
+    function closeModal() {
+      showAddFood.value = false;
+      selectedFood.value = null;
+      document.body.style.overflow = '';
+    }
+
+    function selectFood(food) {
+      selectedFood.value = food;
+      inputGrams.value = food.defaultGrams;
+    }
+
+    function backToList() {
+      selectedFood.value = null;
+    }
+
+    function setGrams(g) {
+      inputGrams.value = g;
+    }
+
+    const previewNutrition = computed(() => {
+      if (!selectedFood.value) return null;
+      const g = parseFloat(inputGrams.value) || 0;
+      const m = g / 100;
+      const f = selectedFood.value;
+      return {
+        calories: Math.round(f.caloriesPer100g * m),
+        protein: Math.round(f.protein * m * 10) / 10,
+        carbs: Math.round(f.carbs * m * 10) / 10,
+        fat: Math.round(f.fat * m * 10) / 10,
+      };
+    });
 
     const filteredFoods = computed(() => {
       let foods = FOOD_DATABASE;
@@ -739,11 +779,14 @@ app.component('diet-page', {
       return foods;
     });
 
-    function addFoodToMeal(food) {
-      const multiplier = food.defaultGrams / 100;
+    function confirmAddFood() {
+      const food = selectedFood.value;
+      if (!food) return;
+      const grams = parseFloat(inputGrams.value) || food.defaultGrams;
+      const multiplier = grams / 100;
       const foodEntry = {
         id: generateId(), foodId: food.id, name: food.name, emoji: food.emoji,
-        quantity: 1, grams: food.defaultGrams, unit: food.defaultUnit,
+        quantity: 1, grams: grams, unit: 'g',
         calories: Math.round(food.caloriesPer100g * multiplier),
         protein: Math.round(food.protein * multiplier * 10)/10,
         carbs: Math.round(food.carbs * multiplier * 10)/10,
@@ -759,8 +802,9 @@ app.component('diet-page', {
           time: addMealType.value==='早餐'?'07:30':addMealType.value==='午餐'?'12:00':addMealType.value==='晚餐'?'18:30':'15:30', note:'',
         });
       }
-      emit('refresh'); showAddFood.value = false;
-      emit('toast', food.name + ' 已添加');
+      emit('refresh');
+      emit('toast', food.name + ' ' + grams + 'g 已添加');
+      selectedFood.value = null;
     }
 
     function removeFood(mealType, foodId) {
@@ -769,7 +813,8 @@ app.component('diet-page', {
     }
 
     function changeDate(delta) {
-      const d = new Date(selectedDate.value); d.setDate(d.getDate()+delta);
+      const d = new Date(selectedDate.value + 'T12:00:00');
+      d.setDate(d.getDate() + delta);
       selectedDate.value = d.toISOString().split('T')[0];
     }
 
@@ -787,7 +832,7 @@ app.component('diet-page', {
       return goal > 0 ? Math.min(Math.round(nutrition.value.calories / goal * 100), 100) : 0;
     });
 
-    return { selectedDate, meals, nutrition, mealTypes, getMealFoods, getMealCalories, showAddFood, addMealType, searchQuery, selectedCategory, filteredFoods, openAddFood, addFoodToMeal, removeFood, changeDate, copyYesterday, isToday, calPercent };
+    return { selectedDate, meals, nutrition, mealTypes, getMealFoods, getMealCalories, showAddFood, addMealType, searchQuery, selectedCategory, filteredFoods, openAddFood, closeModal, selectFood, backToList, setGrams, inputGrams, selectedFood, previewNutrition, confirmAddFood, removeFood, changeDate, copyYesterday, isToday, calPercent };
   },
   template: `
     <div style="padding:16px;">
@@ -840,7 +885,7 @@ app.component('diet-page', {
           <div class="food-emoji">{{food.emoji}}</div>
           <div class="food-info">
             <div class="food-name">{{food.name}}</div>
-            <div class="food-detail">{{food.quantity}}{{food.unit}} · {{food.grams}}g</div>
+            <div class="food-detail">{{food.grams}}g</div>
           </div>
           <div style="text-align:right;">
             <div class="food-cal">{{food.calories}} kcal</div>
@@ -851,29 +896,70 @@ app.component('diet-page', {
       </div>
     </div>
 
-    <div v-if="showAddFood" class="modal-overlay" @click.self="showAddFood=false">
+    <div v-if="showAddFood" class="modal-overlay" @click.self="closeModal">
       <div class="modal-sheet" style="max-height:85vh;">
         <div class="modal-handle"></div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">添加食物 · {{addMealType}}</div>
-        <div class="form-group">
-          <input class="form-input" v-model="searchQuery" placeholder="🔍 搜索食物..." style="font-size:15px;" />
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-size:18px;font-weight:700;">
+            <span v-if="selectedFood" @click="backToList" style="cursor:pointer;margin-right:6px;color:var(--primary);">←</span>
+            {{selectedFood ? '设置份量' : '添加食物 · ' + addMealType}}
+          </div>
+          <button @click="closeModal" style="background:none;border:none;font-size:22px;color:var(--text-secondary);cursor:pointer;padding:4px 0 4px 12px;">✕</button>
         </div>
-        <div class="pill-group" style="margin-bottom:14px;">
-          <span v-for="cat in ['全部','主食','肉类','蛋奶','蔬菜','水果','坚果']" :key="cat" class="pill" :class="{active:selectedCategory===cat}" @click="selectedCategory=cat">{{cat}}</span>
-        </div>
-        <div style="max-height:50vh;overflow-y:auto;">
-          <div v-for="food in filteredFoods" :key="food.id" class="food-item" @click="addFoodToMeal(food)" style="cursor:pointer;">
-            <div class="food-emoji">{{food.emoji}}</div>
-            <div class="food-info">
-              <div class="food-name">{{food.name}}</div>
-              <div class="food-detail">每{{food.defaultUnit}}({{food.defaultGrams}}g) · {{Math.round(food.caloriesPer100g*food.defaultGrams/100)}} kcal</div>
+
+        <template v-if="!selectedFood">
+          <div class="form-group" style="margin-bottom:10px;">
+            <input class="form-input" v-model="searchQuery" placeholder="🔍 搜索食物..." style="font-size:15px;" />
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+            <span v-for="cat in ['全部','主食','肉类','蛋奶','蔬菜','水果','坚果','油脂','豆制品','补剂']" :key="cat" class="pill" :class="{active:selectedCategory===cat}" @click="selectedCategory=cat" style="font-size:12px;">{{cat}}</span>
+          </div>
+          <div style="max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+            <div v-for="food in filteredFoods" :key="food.id" class="food-item" @click="selectFood(food)" style="cursor:pointer;">
+              <div class="food-emoji">{{food.emoji}}</div>
+              <div class="food-info">
+                <div class="food-name">{{food.name}}</div>
+                <div class="food-detail">每100g {{food.caloriesPer100g}} kcal · 默认{{food.defaultGrams}}g</div>
+              </div>
+              <div style="color:var(--primary);font-size:20px;font-weight:300;">›</div>
             </div>
-            <div style="color:var(--primary);font-size:20px;font-weight:300;">+</div>
+            <div v-if="filteredFoods.length===0" class="empty-state" style="padding:20px;">
+              <div class="icon">🔍</div><div class="desc">未找到匹配食物</div>
+            </div>
           </div>
-          <div v-if="filteredFoods.length===0" class="empty-state" style="padding:20px;">
-            <div class="icon">🔍</div><div class="desc">未找到匹配食物</div>
+        </template>
+
+        <template v-else>
+          <div style="text-align:center;padding:8px 0 16px;">
+            <div style="font-size:40px;">{{selectedFood.emoji}}</div>
+            <div style="font-size:18px;font-weight:700;margin-top:4px;">{{selectedFood.name}}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">每100g：{{selectedFood.caloriesPer100g}} kcal · P{{selectedFood.protein}} C{{selectedFood.carbs}} F{{selectedFood.fat}}</div>
           </div>
-        </div>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="form-label">份量 (克)</label>
+            <input class="form-input" type="number" v-model="inputGrams" min="1" step="1" style="font-size:20px;text-align:center;font-weight:700;" />
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;justify-content:center;">
+            <button v-for="g in [50,80,100,120,150,200,250,300]" :key="g" class="pill" :class="{active:inputGrams==g}" @click="setGrams(g)" style="font-size:12px;min-width:44px;">{{g}}g</button>
+            <button class="pill" :class="{active:inputGrams==selectedFood.defaultGrams}" @click="setGrams(selectedFood.defaultGrams)" style="font-size:12px;">默认({{selectedFood.defaultGrams}}g)</button>
+          </div>
+
+          <div v-if="previewNutrition" class="card" style="margin-bottom:16px;background:var(--bg);">
+            <div style="text-align:center;margin-bottom:8px;">
+              <span style="font-size:24px;font-weight:800;color:var(--primary);">{{previewNutrition.calories}}</span>
+              <span style="font-size:13px;color:var(--text-secondary);"> kcal</span>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <div style="flex:1;text-align:center;"><div style="font-size:14px;font-weight:700;color:#3b82f6;">{{previewNutrition.protein}}g</div><div style="font-size:11px;color:var(--text-secondary);">蛋白质</div></div>
+              <div style="flex:1;text-align:center;"><div style="font-size:14px;font-weight:700;color:#f59e0b;">{{previewNutrition.carbs}}g</div><div style="font-size:11px;color:var(--text-secondary);">碳水</div></div>
+              <div style="flex:1;text-align:center;"><div style="font-size:14px;font-weight:700;color:#ef4444;">{{previewNutrition.fat}}g</div><div style="font-size:11px;color:var(--text-secondary);">脂肪</div></div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" @click="confirmAddFood" style="width:100%;">✓ 添加到{{addMealType}}</button>
+        </template>
       </div>
     </div>
   `,
@@ -910,7 +996,8 @@ app.component('workout-page', {
     const isToday = computed(() => selectedDate.value === getToday());
 
     function changeDate(delta) {
-      const d = new Date(selectedDate.value); d.setDate(d.getDate()+delta);
+      const d = new Date(selectedDate.value + 'T12:00:00');
+      d.setDate(d.getDate() + delta);
       selectedDate.value = d.toISOString().split('T')[0];
     }
 
@@ -1110,7 +1197,10 @@ app.component('workout-page', {
     <div v-if="showAddExercise" class="modal-overlay" @click.self="showAddExercise=false">
       <div class="modal-sheet" style="max-height:85vh;">
         <div class="modal-handle"></div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">添加动作</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-size:18px;font-weight:700;">添加动作</div>
+          <button @click="showAddExercise=false" style="background:none;border:none;font-size:22px;color:var(--text-secondary);cursor:pointer;">✕</button>
+        </div>
         <div class="form-group">
           <div class="pill-group" style="margin-bottom:10px;">
             <span v-for="bp in ['胸','背','腿','肩','手臂','核心']" :key="bp" class="pill" :class="{active:selectedBodyPart===bp}" @click="selectedBodyPart=bp">{{bp}}</span>
@@ -1433,7 +1523,10 @@ app.component('profile-page', {
     <div v-if="showEditProfile" class="modal-overlay" @click.self="showEditProfile=false">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:16px;">编辑个人资料</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="font-size:18px;font-weight:700;">编辑个人资料</div>
+          <button @click="showEditProfile=false" style="background:none;border:none;font-size:22px;color:var(--text-secondary);cursor:pointer;">✕</button>
+        </div>
         <div class="form-group"><label class="form-label">昵称</label><input class="form-input" v-model="editForm.name" /></div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">性别</label><select class="form-input" v-model="editForm.gender"><option>男</option><option>女</option></select></div>
@@ -1450,7 +1543,10 @@ app.component('profile-page', {
     <div v-if="showGoals" class="modal-overlay" @click.self="showGoals=false">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:16px;">目标设置</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="font-size:18px;font-weight:700;">目标设置</div>
+          <button @click="showGoals=false" style="background:none;border:none;font-size:22px;color:var(--text-secondary);cursor:pointer;">✕</button>
+        </div>
         <div class="form-group"><label class="form-label">目标类型</label>
           <div class="pill-group"><span v-for="g in ['减脂','增肌','维持']" :key="g" class="pill" :class="{active:goalForm.goalType===g}" @click="goalForm.goalType=g">{{g}}</span></div>
         </div>
@@ -1471,7 +1567,10 @@ app.component('profile-page', {
     <div v-if="showBodyRecord" class="modal-overlay" @click.self="showBodyRecord=false">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:16px;">记录身体数据</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="font-size:18px;font-weight:700;">记录身体数据</div>
+          <button @click="showBodyRecord=false" style="background:none;border:none;font-size:22px;color:var(--text-secondary);cursor:pointer;">✕</button>
+        </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">体重 (kg)</label><input class="form-input" type="number" step="0.1" v-model="bodyForm.weight" placeholder="可选" /></div>
           <div class="form-group"><label class="form-label">腰围 (cm)</label><input class="form-input" type="number" step="0.1" v-model="bodyForm.waist" placeholder="可选" /></div>
@@ -1495,9 +1594,11 @@ app.component('profile-page', {
 // Expose global helpers to all templates
 app.config.globalProperties.formatDate = formatDate;
 app.config.globalProperties.formatDateFull = formatDateFull;
+app.config.globalProperties.getToday = getToday;
 app.config.globalProperties.getDaysAgo = getDaysAgo;
 app.config.globalProperties.generateId = generateId;
 app.config.globalProperties.FOOD_DATABASE = FOOD_DATABASE;
+app.config.globalProperties.FOOD_CATEGORIES = FOOD_CATEGORIES;
 app.config.globalProperties.EXERCISE_PRESETS = EXERCISE_PRESETS;
 app.config.globalProperties.BODY_PARTS = BODY_PARTS;
 app.config.globalProperties.Store = Store;

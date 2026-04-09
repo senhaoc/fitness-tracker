@@ -61,6 +61,7 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  padding-top: max(8px, env(safe-area-inset-top));
   padding-bottom: 80px;
 }
 
@@ -326,6 +327,7 @@ body {
   align-items: flex-end;
   justify-content: center;
   animation: fadeIn 0.2s;
+  overscroll-behavior: contain;
 }
 
 .modal-sheet {
@@ -335,6 +337,8 @@ body {
   max-width: 480px;
   max-height: 90vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 20px;
   padding-bottom: max(20px, env(safe-area-inset-bottom));
   animation: slideUp 0.3s ease;
@@ -348,6 +352,9 @@ body {
   max-width: 480px;
   margin: 0 auto;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: max(8px, env(safe-area-inset-top));
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
   animation: slideRight 0.3s ease;
 }
 
